@@ -1,0 +1,50 @@
+LoadPlugin rrdtool
+LoadPlugin curl
+LoadPlugin users
+LoadPlugin "match_regex"
+LoadPlugin processes
+
+<Plugin rrdtool>
+        DataDir "/var/lib/collectd/rrd"
+</Plugin>
+
+{% if app.stat.exists %}
+<Plugin curl>
+  <Page "application-manifest">
+    URL "https://{{ appProxyName.matches[0].Connector["proxyName"] }}{{ appContext.matches[0].Context["path"] or '/' }}/rest/applinks/latest/manifest"
+    MeasureResponseCode true
+  </Page>
+</Plugin>
+{% endif %}
+
+<Plugin processes>
+{% if app.stat.exists %}
+   ProcessMatch "applicationProcess" "/application/path/as/found/on/ps*"
+{% endif %}
+</Plugin>
+
+PreCacheChain "PreCache"
+<Chain "PreCache">
+  <Rule "filter_curl">
+        <Match "regex">
+                Plugin "curl*"
+        </Match>
+       Target "write"
+   </Rule>
+  <Rule "filter_users">
+        <Match "regex">
+                Plugin "users"
+        </Match>
+       Target "write"
+   </Rule>
+  <Rule "filter_processes-ps_count">
+        <Match "regex">
+                Plugin "^processes$"
+                Type "^ps_count$"
+		Invert true
+        </Match>
+        Target "stop"
+   </Rule>
+   Target "write"
+</Chain>
+

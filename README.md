@@ -25,14 +25,12 @@ Run 1 playbook to install the following on the target EC2 instances (asuming lin
     * metric : process check of the application
     * metric : number of users logged in
 
-
-
 For this, we use the following architecture
 # Dependencies
-* Cloudwatch agent installation role : christiangda.amazon_cloudwatch_agent
+* Cloudwatch agent installation role : christiangda.amazon_cloudwatch_agent https://galaxy.ansible.com/christiangda/amazon_cloudwatch_agent
 ```ansible-galaxy install christiangda.amazon_cloudwatch_agent```
 
-* CollectD : https://collectd.org
+* CollectD : https://collectd.org (installed with apt module)
 ** Collectd plugin curl
 ** Collectd plugin processes
 ** Collectd plugin users

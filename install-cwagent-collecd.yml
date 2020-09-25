@@ -1,0 +1,97 @@
+---
+- hosts: ec2
+  become: true
+  become_method: sudo
+  gather_facts: True
+
+  pre_tasks:
+
+    - name: Install the package "collectd"
+      become: yes
+      apt:
+         name: collectd
+
+    - name: Install the package "lxml"
+      become: yes
+      apt:
+         name: python-lxml
+
+
+# start of Application details gathering
+    - name: [Application details gathering] check if Application exists on this server
+      stat:
+             path: /opt/application
+      register: app
+
+    - name: [Application details gathering] find Application proxyName
+      when: app.stat.exists
+      xml:
+             path: /opt/application/current/conf/server.xml
+             content:  attribute
+             #xpath: string(/Server/Service[@name="Catalina"]/Connector/@proxyName)
+             xpath: /Server/Service[@name="Catalina"]/Connector
+      register: appProxyName
+      # use appProxyName.matches[0].Connector["proxyName"]
+
+    - name: [Application details gathering] Show Application proxyName value
+      when: app.stat.exists
+      debug:
+             var: appProxyName
+             #var: appProxyName.matches[0].Connector["proxyName"]
+
+    - name: [Application details gathering] find Application context path
+      when: app.stat.exists
+      xml:
+             path: /opt/application/current/conf/server.xml
+             content:  attribute
+             #xpath: string(/Server/Service/Engine/Host/Context/@path)
+             xpath: /Server/Service/Engine/Host/Context
+      register: appContext
+      #use : appContext.matches[0].Context["path"]
+ 
+    - name: [Application details gathering] Show Application Context value
+      when: app.stat.exists
+      debug:
+        var: appContext
+             #var: appProxyName.matches[0].Connector["proxyName"]
+
+# end of Application details
+
+    - name: Copy base collectd configuration file
+      copy:
+        src: files/collectd.conf
+        dest: /etc/collectd/collectd.conf
+        owner: root
+        group: root
+        mode: '0644'
+        backup: yes
+
+    - name: generate and push Collectd configuration file
+      template:
+             src: files/custom-collectd.conf.j2
+             dest: /etc/collectd/collectd.conf.d/custom-collectd.conf
+             #owner: root
+             #group: root
+             mode: '0644'
+             #validate: /usr/sbin/sshd -t -f %s
+             backup: yes
+
+  roles:
+    - role: christiangda.amazon_cloudwatch_agent
+      vars:
+        cwa_agent_mode: "ec2"
+        cwa_conf_json_file_content: "{{ lookup('file', 'files/aws-cloudwatch-agent-config.json') | from_json }}"
+
+  post_tasks:
+    - name: Restart service collectd, in all cases
+      service:
+         name: collectd
+         state: restarted
+      
+    - name: Start cloudwatch agent
+      shell: |
+        set -o pipefail
+        cp /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json /opt/aws/amazon-cloudwatch-agent/bin/config.json
+        sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json -s
+      args:
+        executable: "/bin/bash"
